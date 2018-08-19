@@ -1,0 +1,17 @@
+Data format:
+  send message to socket server, to avoid tcp splicing.
+    one step: send length of next message with int(4 bit)
+    two step: send message to socket server
+
+Achieve
+  matrix_multiplication_script detail script to deal with matrix
+
+  issued_task_client
+    Accept three parameters, task name, matrix file(the file must be loaded by json), and client address.
+    Owing to maybe have some address is not connected in those, so our address is true in total socket server accepted,
+    And we need send the task name and matrix file to total socket server and the task name to all address in the script.
+
+  total_server_service total socket server, send all matrix to clients and accept all response of clients.
+
+  part_server_service part socket server, to accept matrix from total server and use matrix_multiplication_script to
+    deal with matrix
