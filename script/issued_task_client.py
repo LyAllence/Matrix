@@ -5,42 +5,39 @@ import json
 import sys
 import socket
 import struct
+import os
 import hashlib
+from datetime import datetime
 
 # set socket timeout
 socket.setdefaulttimeout(10)
 
 # set option of the script
 _parser = optparse.OptionParser()
-_parser.add_option('-f', '--file', action='store', dest='file',
-                   help='you must offer a json file path to store the matrix')
 _parser.add_option('-n', '--name', action='store', dest='name',
                    help='you must offer a task name in the option')
 _parser.add_option('-a', '--address', action='store', dest='address',
-                   help='you must offer a json file path to store the client address')
+                   help='you must offer a client address in the option')
 
 # define global variable
 server_address = ('0.0.0.0', 17788)
 _variable = {}
+task_name = None
 
 
 # parse parameter of user enter
 def parse_option():
     try:
         (options, args) = _parser.parse_args()
-        file = options.file
         name = options.name
-        address = options.address
-        if not file or not name or not address:
+        client_address = options.address
+        if not name or not client_address:
             raise optparse.OptionConflictError('', '')
-        _variable['matrix_file'] = json.load(file)
-        _variable['address_file'] = json.load(address)
         _variable['task'] = name
+        _variable['address_file'] = client_address
 
     except optparse.OptionConflictError:
         _parser.print_help()
-    except json.JSONDecodeError:
-        print('Error, you must offer valid json file path', sys.stderr)
 
 
 # generate md5 of specify message
@@ -50,47 +47,124 @@ def md5(message):
     return sha.hexdigest()
 
 
-# send message to address, the address is tuple (ip, port)
-def socket_client(address, message1, message2, message3):
+def send_socket(address, message1, message2):
     client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client.connect(address)
     client.send(message1)
-    client.send(message2)
-    client.sendall(message3)
+    client.sendall(message2)
+    if client.recv(6).decode() == 'access':
+        if address == server_address:
+            send_file()
+        else:
+            send_compute_matrix(address)
+    else:
+        print('your task is rejected, please check it and try\'in again!')
     client.close()
+
+
+# send all file to total.
+def send_file():
+    path = input('Enter your matrix path:')
+    if not os.path.isdir(path):
+        print('Error: your path is invalid!')
+        headers = {
+            'task': task_name,
+            'action': 'delete',
+        }
+        headers_json = json.dumps(headers).encode()
+        headers_pack = struct.pack('i', len(headers_json))
+        send_socket(server_address, headers_pack, headers_json)
+        sys.exit(1)
+
+    all_file = os.listdir(path)
+    for file in all_file:
+        with open(file, 'r') as f_read:
+            file_json = json.dumps(json.load(f_read)).encode()
+            headers = {
+                'task': task_name,
+                'filename': os.path.basename(file),
+                'size': len(file_json),
+                'action': 'storage',
+            }
+            headers_json = json.dumps(headers).encode()
+            headers_pack = struct.pack('i', len(headers_json))
+            client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client.connect(server_address)
+            client.send(headers_pack)
+            client.send(headers_json)
+            client.sendall(file_json)
+            client.close()
+
+
+# send compute matrix to client
+def send_compute_matrix(address):
+    file_matrix = input('Enter your compute matrix path:')
+    if not os.path.isfile(file_matrix):
+        print('Error: your path is invalid!')
+        headers = {
+            'task': task_name,
+            'action': 'delete',
+        }
+        headers_json = json.dumps(headers).encode()
+        headers_pack = struct.pack('i', len(headers_json))
+        send_socket(server_address, headers_pack, headers_json)
+
+        headers = {
+            'task': task_name,
+            'filename': os.path.basename(file_matrix),
+            'action': 'delete',
+        }
+        headers_json = json.dumps(headers).encode()
+        headers_pack = struct.pack('i', len(headers_json))
+        send_socket(address, headers_pack, headers_json)
+
+        sys.exit(1)
+
+    with open(file_matrix, 'r') as f_read:
+        file_json = json.dumps(json.load(f_read)).encode()
+        headers = {
+            'task': task_name,
+            'filename': os.path.basename(file_matrix),
+            'size': len(file_json),
+            'action': 'storage',
+        }
+        headers_json = json.dumps(headers).encode()
+        headers_pack = struct.pack('i', len(headers_json))
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect(address)
+        client.send(headers_pack)
+        client.send(headers_json)
+        client.sendall(file_json)
+        client.close()
 
 
 # send task name and matrix file to total socket server
 def send_total_socket():
-    send_file_message = json.dumps(_variable['matrix_file']).encode()
-    send_file_md5 = md5(send_file_message)
+    send_file_md5 = md5(str(datetime.now()).encode())
+    global task_name
+    task_name = _variable['task'] + send_file_md5
     headers = {
-        'task': _variable['task'] + send_file_md5,
-        'size': len(send_file_message),
-        'md5': send_file_md5,
+        'task': task_name,
+        'action': 'task',
     }
     headers_json = json.dumps(headers).encode()
     headers_pack = struct.pack('i', len(headers_json))
-    socket_client(server_address, headers_pack, headers_json, send_file_message)
+    send_socket(server_address, headers_pack, headers_json)
 
 
 # send task name to all client
 def send_client_socket():
-    send_file_message = json.dumps(_variable['matrix_file']).encode()
-    send_file_md5 = md5(send_file_message)
     headers = {
-        'task': _variable['task'] + send_file_md5,
-        'size': 1,
-        'md5': send_file_md5,
+        'task': task_name,
+        'action': 'deploy',
     }
     headers_json = json.dumps(headers).encode()
     headers_pack = struct.pack('i', len(headers_json))
     for address in _variable['address_file']:
-        socket_client(address, headers_pack, headers, '1')
+        send_socket(address, headers_pack, headers_json)
 
 
 if __name__ == '__main__':
-    print(md5('777'.encode()))
-    # parse_option()
-    # send_total_socket()
-    # send_client_socket()
+    parse_option()
+    send_total_socket()
+    send_client_socket()

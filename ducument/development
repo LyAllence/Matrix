@@ -3,6 +3,10 @@ Data format:
     one step: send length of next message with int(4 bit)
     two step: send message to socket server
 
+Socket:
+  To improve efficiency of socket, we'll use one client, one deal.
+  So, we'll have client and server with one machine.
+
 Achieve
   matrix_multiplication_script detail script to deal with matrix
 
@@ -15,3 +19,11 @@ Achieve
 
   part_server_service part socket server, to accept matrix from total server and use matrix_multiplication_script to
     deal with matrix
+
+File:
+  we have two directory, one is data, to storage all matrix, and child file is task:matrix.
+  and other file is result, and child file is task:matrix
+
+
+process: partial send request to total, total response the matrix to client, client compute result, and send it to total.
+

@@ -14,3 +14,12 @@ Script:
 Multiplication:
   per time we will send base matrix to per client, if have other matrix, send to client after the client is finish
   it's work, maybe some client will irq, and it not finish working also will send to other client.
+
+All Process:
+   One step: we send a task with issued_task_client, and we need enter a task to run the script. the one will send task to
+         server and client
+   Two step: client will  request the total with send the task name. total will send matrix to client
+   Three step: client compute the matrix and send result to total
+   Four step: total receive the result and judge the result is partial or not. if true, close the client, if false.
+         inspect the all matrix if complex or not. if finish ,exit , if not goon
+
